@@ -1,0 +1,8 @@
+version: 2
+# Security fixes for packages are switched on in the repository settings and need no entry here.
+# This only keeps the commit-pinned GitHub Actions in the workflow from going stale.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

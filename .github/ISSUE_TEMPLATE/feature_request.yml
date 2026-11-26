@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are public, so **never paste an API key or token**.
+        ShadowBlack's artwork is not open to contributions (see `CONTRIBUTING.md`).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like PawGauge to do?
+      description: Say what you are trying to get done and why the current behaviour does not cover it.
+    validations:
+      required: true
+  - type: checkboxes
+    id: nokeys
+    attributes:
+      label: Before you submit
+      options:
+        - label: I checked that this request contains no API keys, tokens or private account details.
+          required: true

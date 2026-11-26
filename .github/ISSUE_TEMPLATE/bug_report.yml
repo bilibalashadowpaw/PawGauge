@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in PawGauge does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ Never paste an API key or token
+        Issues are public. Check logs, settings files and screenshots before you attach them, and blank out keys, tokens, email addresses and account details.
+        If you already posted a key, **revoke it with that service right away**. Editing the issue is not enough.
+        For a security problem, do not open an issue: use **Report a vulnerability** on the Security tab.
+  - type: input
+    id: version
+    attributes:
+      label: PawGauge version
+      description: Shown at the top of the tray (Windows) or menu-bar (macOS) menu.
+      placeholder: "0.4.40"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Which kind of account it was, or a screenshot with private details blanked out.
+  - type: checkboxes
+    id: nokeys
+    attributes:
+      label: Before you submit
+      options:
+        - label: I checked that this report contains no API keys, tokens or private account details.
+          required: true
