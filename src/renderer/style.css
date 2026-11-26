@@ -1,6 +1,6 @@
 /* PawGauge. Level meters are the one expressive element; everything else stays quiet.
    One radius scale: 8px surfaces/buttons, 2px meter segments. One accent (ice blue) for focus and toggles.
-   Green/amber/red appear only as meter state; the service badge colours stay clear of orange and red. */
+   Green/amber/red are meter state. Each account block is tinted with its service's theme colour. */
 
 :root {
   color-scheme: dark light;
@@ -18,7 +18,9 @@
   --warn: #f2b84b;
   --crit: #f26b66;
   --orange: #f59a3f;
-  --badge-ink: 62%; /* how much of a badge letter is the service colour; the rest is --text */
+  --badge-ink: 55%; /* how much of a badge letter is the service colour; the rest is --text */
+  --block-tint: 12%;
+  --block-muted: #8a9ba5; /* small grey text on a tinted block */
 
   --r: 8px;
   --r-seg: 2px;
@@ -38,6 +40,8 @@
     --crit: #c2403b;
     --orange: #c2610f;
     --badge-ink: 36%;
+    --block-tint: 10%;
+    --block-muted: #3d4e59;
   }
 }
 
@@ -91,17 +95,25 @@ body { user-select: none; cursor: default; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
-/* Accounts, separated by space and a single rule, not boxed */
+/* Owner's decision (2026-11-26): each service wears its own theme colour, so accounts can be told apart at a glance. That
+   includes Claude's terracotta and MiniMax's pink-red although they sit near the warning colours: do not "fix" this. */
 .acct {
-  --hue: var(--muted); /* each service's badge colour: our own picks, only there to tell the letters apart */
-  padding: 14px 0 15px;
+  --hue: var(--muted);
+  --muted: var(--block-muted);
+  margin: 8px -8px 0;
+  padding: 11px 8px 12px 10px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--hue) var(--block-tint), transparent);
+  box-shadow: inset 3px 0 0 var(--hue); /* the coloured left edge */
 }
-.acct[data-provider='anthropic'] { --hue: #2fbdb0; }
-.acct[data-provider='zai'] { --hue: #9d7df5; }
-.acct[data-provider='minimax'] { --hue: #d767cf; }
-.acct[data-provider='deepseek'] { --hue: #3fa9e0; }
-.acct + .acct { border-top: 1px solid var(--line); }
+.acct[data-provider='anthropic'] { --hue: #d97757; }
+.acct[data-provider='zai'] { --hue: var(--text); --block-tint: 6%; } /* a black-and-white brand */
+.acct[data-provider='minimax'] { --hue: #f0406a; }
+.acct[data-provider='deepseek'] { --hue: #4d6bfe; }
 .acct.dragging { opacity: 0.55; }
+@media (prefers-color-scheme: light) {
+  .acct { --crit: #a32f2a; --orange: #96480a; }
+}
 
 .acct-head {
   display: grid;
@@ -133,8 +145,8 @@ body { user-select: none; cursor: default; }
   width: 28px;
   height: 28px;
   border-radius: var(--r);
-  border: 1px solid color-mix(in srgb, var(--hue) 55%, var(--line));
-  background: color-mix(in srgb, var(--hue) 22%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--hue) 65%, var(--line));
+  background: color-mix(in srgb, var(--hue) 26%, var(--surface));
   color: color-mix(in srgb, var(--hue) var(--badge-ink), var(--text));
   font: 700 13px var(--font-mono);
 }

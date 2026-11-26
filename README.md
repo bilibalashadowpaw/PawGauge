@@ -117,7 +117,7 @@ Her sprites are built from the official character master by `tools/make_sprites.
 
 | Version | What's new |
 |---|---|
-| **0.4.39** | Coloured letter badge for each service |
+| **0.4.40** | Each account is tinted in its service's colour |
 | **0.4.37** | Simpler app and tray icon |
 | **0.4.36** | Fixed: clicking ShadowBlack while she hides could do nothing |
 | **0.4.12 - 0.4.22** | Tuck PawGauge away at the left or right screen edge |
