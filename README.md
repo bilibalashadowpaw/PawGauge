@@ -113,6 +113,19 @@ A transparent, click-through window perches on the top edge of the panel (`src/m
 
 Her sprites are built from the official character master by `tools/make_sprites.py` and are not part of the MIT licence (see below).
 
+## Update log
+
+| Version | What's new |
+|---|---|
+| **0.4.39** | Coloured letter badge for each service |
+| **0.4.37** | Simpler app and tray icon |
+| **0.4.36** | Fixed: clicking ShadowBlack while she hides could do nothing |
+| **0.4.12 - 0.4.22** | Tuck PawGauge away at the left or right screen edge |
+| **0.4.9** | Drag the window, or collapse it to a small pill |
+| **0.4.7** | Renamed to PawGauge |
+| **0.4.3** | macOS support |
+| **0.3.0** | ShadowBlack arrives |
+
 ## Licence
 
 - **Code:** [MIT](LICENSE).
