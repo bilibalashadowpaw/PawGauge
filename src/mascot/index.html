@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+  <title>ShadowBlack</title>
+  <link rel="stylesheet" href="mascot.css">
+</head>
+<body data-mood="loading">
+  <!-- ShadowBlack mascot art: official kit via tools/make_sprites.py (never edited, never mirrored). -->
+  <div class="stage" id="stage">
+    <div class="slot" id="slot">
+      <div class="rig" id="rig"><div class="follow" id="follow"><div class="mover" id="mover">
+        <img draggable="false" class="layer tail" id="tail" src="sprites/peek-tail.png" alt="">
+        <img draggable="false" class="layer" src="sprites/peek-body.png" alt="">
+      </div></div></div>
+    </div>
+  </div>
+  <!-- Tucked to the screen edge: she peeks round the edge (render of the official master, see tools/make_dock_sprite.py). -->
+  <img draggable="false" class="dock" id="dock" src="sprites/dock.png" alt="">
+  <!-- Left edge: her own render (wall on the left), never a mirrored copy. -->
+  <img draggable="false" class="dock dock-left" id="dock-left" src="sprites/dock-left.png" alt="">
+  <script src="mascot.js"></script>
+</body>
+</html>

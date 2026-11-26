@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:">
+  <meta name="color-scheme" content="dark light">
+  <title>PawGauge</title>
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/geist/index.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/geist-mono/index.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <header class="top">
+      <h1>Usage</h1>
+      <div class="top-actions">
+        <span id="updated" class="updated"></span>
+        <button id="autosort" class="icon-btn" type="button" aria-label="Sort by urgency" title="Sort by urgency" hidden></button>
+        <button id="refresh" class="icon-btn" type="button" aria-label="Refresh now" title="Refresh now"></button>
+        <button id="mascot" class="icon-btn" type="button" aria-label="Show ShadowBlack" aria-pressed="true" title="Show ShadowBlack"></button>
+        <button id="pin" class="icon-btn" type="button" aria-label="Keep on top" aria-pressed="true" title="Keep on top"></button>
+        <button id="collapse" class="icon-btn" type="button" aria-label="Collapse to a small pill" aria-expanded="true" title="Collapse"></button>
+        <button id="hide" class="icon-btn" type="button" aria-label="Hide to tray" title="Hide to tray (Esc)"></button>
+        <button id="quit" class="icon-btn" type="button" aria-label="Quit PawGauge" title="Quit PawGauge"></button>
+      </div>
+    </header>
+    <section id="list" class="list"></section>
+  </main>
+  <!-- Collapsed form: drag to move, click to expand. -->
+  <button id="pill" class="pill" type="button" aria-expanded="false" aria-label="Expand PawGauge" tabindex="-1">
+    <span class="p-dot" aria-hidden="true"></span>
+    <span id="pill-name" class="p-name">PawGauge</span>
+    <span id="pill-val" class="p-val">--</span>
+  </button>
+  <script src="../shared/levels.js"></script>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

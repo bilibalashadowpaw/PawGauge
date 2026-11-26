@@ -1,0 +1,113 @@
+/* ShadowBlack perch. The window is transparent and its bottom edge is the top edge of the PawGauge panel,
+   so anything pushed below the bottom is "behind the window". She always clings to the edge in the peek pose,
+   at one fixed size; moods are expressed with motion only. Her signature is never altered: no mirroring,
+   no recolouring, eyes untouched. */
+:root { --halo: rgba(200, 170, 255, 0.5); }
+body[data-mood='warn'] { --halo: rgba(242, 184, 75, 0.6); }
+body[data-mood='crit'] { --halo: rgba(242, 107, 102, 0.65); }
+
+/* The sprites are images: a press plus a small move would start the browser's image drag and swallow the click. */
+img { -webkit-user-drag: none; user-select: none; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+.stage { position: fixed; inset: 0; overflow: hidden; zoom: 0.65; } /* mascot display size */
+/* On the collapsed pill she is smaller. Scaled about the bottom centre so she stays on the window edge. */
+.stage { transform-origin: 50% 100%; transition: transform 0.45s cubic-bezier(0.34, 1.12, 0.64, 1); }
+.stage.mini { transform: scale(0.78); }
+
+/* Peek sprite: 466x341 shown at half size, head centred in the 392px window. The bottom 10.2px are extra body that
+   hides below the window line, so hops and head tilts never open a gap between her and the window edge. */
+.slot {
+  position: absolute;
+  left: 154px;
+  bottom: -10.2px; /* 34 extra rows x 0.6 / 2 */
+  width: 233px;
+  height: 170.5px;
+  transform-origin: 50% 94%;
+  transition: transform 0.5s cubic-bezier(0.34, 1.12, 0.64, 1); /* rises with a hint of overshoot */
+}
+.slot.drowsy { transform: translateY(9px); }
+.slot.asleep { transform: translateY(58%); }
+.slot.duck { transform: translateY(105%); transition-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+
+.rig {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 94%;
+  filter: drop-shadow(0 0 4px var(--halo));
+  animation: breathe 4.6s ease-in-out infinite;
+}
+body[data-mood='crit'] .rig { animation-duration: 2.4s; }
+.slot.drowsy .rig, .slot.asleep .rig { animation-duration: 7s; }
+.rig.stretch { animation: stretch 1.5s ease-out 1; }
+
+.follow {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 94%;
+  transform: rotate(calc(var(--lx, 0) * 2.2deg)) translateX(calc(var(--lx, 0) * 4px));
+  transition: transform 0.35s ease-out;
+}
+.mover { position: relative; width: 100%; height: 100%; transform-origin: 50% 94%; }
+.mover.look { animation: look 2.2s ease-in-out 1; }
+.mover.hop { animation: hop 0.9s ease-out 1; }
+.layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+
+/* The tail runs down behind the window line and sways about a pivot hidden behind it. */
+.tail {
+  transform-origin: 35.15px 160.5px; /* sprites.json tailPivot [70.3, 321.0] at half size */
+  transform: rotate(-4deg);
+  animation: sway 3.8s ease-in-out infinite;
+}
+body[data-mood='warn'] .tail { animation-duration: 1.7s; }
+body[data-mood='crit'] .tail { animation-duration: 0.9s; }
+.slot.drowsy .tail, .slot.asleep .tail { animation-duration: 7s; }
+.tail.flick { animation: flick 0.9s ease-in-out 1; }
+
+/* Tucked: only the side-peek sprite shows, flush with the window's right (= the screen's) edge and its bottom. */
+.dock { display: none; position: absolute; right: 0; bottom: 0; height: 133px; filter: drop-shadow(0 0 4px var(--halo)); transform-origin: 100% 100%; animation: breathe 4.6s ease-in-out infinite; }
+body.docked .dock { display: block; }
+.dock-left { right: auto; left: 0; transform-origin: 0 100%; }
+body.docked .dock-left, body.docked.left .dock { display: none; }
+body.docked.left .dock-left { display: block; }
+body.docked .stage { display: none; }
+/* Windows lets clicks fall through fully transparent pixels of a transparent window. A 2% veil makes her whole docked
+   rectangle clickable, not just the cat's silhouette (the tail curl and the gaps around her used to miss). */
+body.docked { background: rgba(0, 0, 0, 0.02); cursor: pointer; }
+body[data-mood='crit'] .dock { animation-duration: 2.4s; }
+
+@keyframes breathe { 50% { transform: scale(1.006, 1.016); } }
+@keyframes stretch {
+  0% { transform: none; }
+  35% { transform: scale(0.97, 1.09); }
+  60% { transform: scale(1.02, 0.97); }
+  100% { transform: none; }
+}
+@keyframes sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(5deg); }
+}
+@keyframes flick {
+  0%, 100% { transform: rotate(-4deg); }
+  20% { transform: rotate(12deg); }
+  40% { transform: rotate(-8deg); }
+  60% { transform: rotate(12deg); }
+  80% { transform: rotate(-6deg); }
+}
+@keyframes look {
+  0%, 100% { transform: rotate(0); }
+  30%, 45% { transform: rotate(3deg) translateX(3px); }
+  70%, 80% { transform: rotate(-2.5deg) translateX(-3px); }
+}
+@keyframes hop {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(-8px) scale(0.98, 1.04); }
+  55% { transform: translateY(0) scale(1.03, 0.97); }
+  75% { transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock, .rig, .tail, .mover.look, .mover.hop, .tail.flick, .rig.stretch { animation: none; }
+  .tail { transform: none; }
+  .slot, .stage { transition: none; }
+}
