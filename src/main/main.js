@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, shell, session, systemPreferences } = require('electron');
-const { loadAccounts } = require('./accounts');
+const { scanAccounts } = require('./accounts');
 const { Poller } = require('./poller');
 const { providers } = require('./providers');
 const { History } = require('./history');
@@ -36,6 +36,7 @@ const FADE_MS = 110; // the panel fades out this long before the window shrinks
 const TWEEN_MS = 240; // window grow/shrink
 const SNAP = 14; // px from a screen edge where a dropped window snaps flush
 const AUTO_COLLAPSE_MS = 30_000;
+const SETUP_GUIDE_URL = 'https://github.com/bilibalashadowpaw/PawGauge#accounts-and-settings';
 
 let win = null;
 let tray = null;
@@ -52,6 +53,9 @@ let pillDrag = null; // { cx, cy, x, y }: cursor and window position when a pill
 let anchor = { ax: 'right', ay: 'bottom' }; // the screen corner the window grows from / shrinks to
 let autoCollapse = false;
 let pendingExpand = false; // "Show" arrived while a collapse was still animating
+let userDir = null;
+let scan = null; // the latest account scan: { accounts, report }; null with demo data
+let setupAsked = false; // "Account check" was chosen from the tray menu
 
 // The pages only ever load our own bundled files and never navigate. Refuse anything else a page might try: new windows,
 // any navigation or redirect, and permission prompts (camera, notifications, ...).
@@ -415,6 +419,29 @@ function toggleWindow() {
   else showWindow();
 }
 
+/* ---------- accounts: scanned at startup, on Refresh and from the account check ---------- */
+const hasKeyAccount = () => scan.accounts.some((a) => a.provider !== 'anthropic');
+
+function refresh() {
+  if (!poller) return;
+  scan = scanAccounts(userDir);
+  poller.refreshAll(poller.setAccounts(scan.accounts));
+  pushState();
+}
+
+// The account check opens by itself while no account with a key is found, until it is closed; the tray menu reopens it.
+function setupState() {
+  if (!scan) return null;
+  const dismissed = !SHOT && prefs.get('setupDismissed', false) === true;
+  return setupAsked || (!hasKeyAccount() && !dismissed) ? scan.report : null;
+}
+
+function openSetup() {
+  setupAsked = true;
+  showWindow(true);
+  refresh();
+}
+
 function currentState() {
   const order = prefs && !SHOT ? prefs.get('order', null) : null; // screenshots never use the owner's settings
   const mascotOn = prefs && !SHOT ? prefs.get('mascot', true) !== false : true;
@@ -424,7 +451,7 @@ function currentState() {
     return { ...s, accounts: applyOrder(s.accounts, order), manualOrder: !!(order && order.length), mascot: mascotOn, ...mode };
   }
   poller.order = order;
-  return { ...poller.snapshot(), mascot: mascotOn, ...mode };
+  return { ...poller.snapshot(), setup: setupState(), mascot: mascotOn, ...mode };
 }
 
 // One switch for ShadowBlack, shared by the tray menu and the header button; both stay in step.
@@ -470,7 +497,8 @@ function createTray() {
       checked: hideMode() === 'edge',
       click: (item) => prefs.set('hideMode', item.checked ? 'edge' : 'tray'),
     },
-    { label: 'Refresh now', click: () => poller && poller.refreshAll() },
+    { label: 'Refresh now', click: refresh },
+    { label: 'Account check…', enabled: !USE_DEMO, click: openSetup },
     { type: 'separator' },
     { id: 'mascot', label: 'ShadowBlack', type: 'checkbox', checked: mascot ? mascot.isEnabled() : true, click: (item) => setMascot(item.checked) },
     {
@@ -508,7 +536,14 @@ ipcMain.on('open-provider', (_e, id) => {
   const url = typeof id === 'string' && providers[id] && providers[id].url;
   if (url && url.startsWith('https://')) shell.openExternal(url);
 });
-ipcMain.on('refresh', () => poller && poller.refreshAll());
+ipcMain.on('refresh', refresh);
+ipcMain.on('close-setup', () => {
+  if (!scan) return;
+  setupAsked = false;
+  if (!hasKeyAccount()) prefs.set('setupDismissed', true); // someone with only a Claude plan is not asked again
+  pushState();
+});
+ipcMain.on('open-setup-guide', () => shell.openExternal(SETUP_GUIDE_URL));
 ipcMain.on('quit', () => {
   app.isQuitting = true;
   app.quit();
@@ -567,7 +602,7 @@ app.whenReady().then(() => {
   if (IS_MAC && app.dock) app.dock.hide(); // tray-only app: no Dock icon
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
-  const userDir = path.join(app.getPath('appData'), 'PawGauge');
+  userDir = path.join(app.getPath('appData'), 'PawGauge');
   // The app was called UsageDesk before 0.4.7: copy its settings over once. (Electron has already created this folder for
   // its own caches by now, so test for each file, never for the folder.)
   const oldDir = path.join(app.getPath('appData'), 'UsageDesk');
@@ -602,7 +637,8 @@ app.whenReady().then(() => {
   createTray();
 
   if (!USE_DEMO) {
-    poller = new Poller(loadAccounts(userDir), new History(userDir));
+    scan = scanAccounts(userDir);
+    poller = new Poller(scan.accounts, new History(userDir));
     poller.on('change', pushState);
     poller.start();
   }

@@ -302,4 +302,21 @@ html.collapsed .pill {
 .pill.s-crit .p-val { color: var(--crit); }
 .pill.s-idle { --state: var(--muted); }
 
+/* Account check */
+.setup { margin: 8px -8px 0; padding: 10px 10px 12px; border-radius: var(--r); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.setup-head { display: flex; align-items: center; justify-content: space-between; }
+.setup-head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.setup-head .icon-btn { width: 24px; height: 24px; margin-right: -4px; }
+.setup-head .icon-btn svg { width: 14px; height: 14px; }
+.setup-summary { margin: 4px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.setup-files { margin: 8px 0 0; padding: 0; list-style: none; }
+.setup-files li { padding: 6px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; user-select: text; }
+.f-name { display: block; font: 500 12px var(--font-mono); }
+.f-why { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.setup-files .found .f-why { color: var(--accent); }
+.setup-note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.setup-actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn { padding: 5px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: 500 12px var(--font-sans); cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+
 [hidden] { display: none !important; }

@@ -92,12 +92,41 @@ class Poller extends EventEmitter {
     this.timers.clear();
   }
 
-  async refreshAll() {
-    await Promise.all(this.accounts.map((a) => this._poll(a)));
+  /** Take a fresh scan: unchanged accounts keep their reading and timer, new ones start polling, gone ones stop. */
+  setAccounts(next) {
+    const same = (a, b) => a.id === b.id && a.provider === b.provider && a.settings === b.settings && a.env === b.env && a.claudeDir === b.claudeDir;
+    const added = [];
+    const accounts = next.map((a) => {
+      const old = this.accounts.find((o) => same(o, a));
+      if (!old) {
+        added.push(a);
+        return a;
+      }
+      Object.assign(old, a); // same object, so its running loop carries on
+      Object.assign(this.views.get(old.id), { label: old.label });
+      return old;
+    });
+    for (const o of this.accounts) {
+      if (accounts.includes(o)) continue;
+      clearTimeout(this.timers.get(o.id));
+      this.timers.delete(o.id);
+    }
+    this.views = new Map(accounts.map((a) => [a.id, added.includes(a) ? this._blank(a) : this.views.get(a.id)]));
+    this.accounts = accounts;
+    this.emit('change');
+    added.forEach((a) => this._loop(a));
+    return added;
+  }
+
+  /** skip: accounts that setAccounts has just started, which are polling already. */
+  async refreshAll(skip = []) {
+    await Promise.all(this.accounts.filter((a) => !skip.includes(a)).map((a) => this._poll(a)));
   }
 
   async _loop(a) {
+    if (!this.accounts.includes(a)) return; // dropped by a rescan
     await this._poll(a);
+    if (!this.accounts.includes(a)) return;
     this.timers.set(a.id, setTimeout(() => this._loop(a), providers[a.provider].intervalMs));
   }
 
@@ -111,6 +140,7 @@ class Poller extends EventEmitter {
         if (!key) throw new ProviderError('nokey', 'No key found');
       }
       const r = await p.fetchUsage(a, key);
+      if (!this.accounts.includes(a)) return; // a rescan dropped it while the request was in flight
       const view = {
         ...this._blank(a),
         ...r,
@@ -124,6 +154,7 @@ class Poller extends EventEmitter {
       }
       this.views.set(a.id, view);
     } catch (e) {
+      if (!this.accounts.includes(a)) return;
       const kind = e instanceof ProviderError ? e.kind : 'network';
       const message = e instanceof ProviderError ? e.message : 'Unexpected error';
       // Keep the last good reading visible (dimmed by the UI) next to the error.

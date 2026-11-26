@@ -1,7 +1,7 @@
 'use strict';
 
 class ProviderError extends Error {
-  /** kind: 'auth' | 'network' | 'http' | 'shape' | 'nokey' */
+  /** kind: 'auth' | 'network' | 'http' | 'shape' | 'nokey' | 'moved' | 'region' */
   constructor(kind, message) {
     super(message);
     this.kind = kind;

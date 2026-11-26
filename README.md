@@ -39,7 +39,15 @@ AI plans hide their limits behind a settings page: a 5-hour window here, a weekl
 | **MiniMax** | Interval and weekly usage, per model family | `GET api.minimax.io/v1/token_plan/remains` (undocumented; only the `*_remaining_percent` fields are reliable) |
 | **DeepSeek** | Prepaid balance and days left at your current spend | `GET api.deepseek.com/user/balance` (documented; the days-left estimate needs a day of history) |
 
-Accounts are found automatically: PawGauge reads `~/.claude/settings.*.json` and picks the service from each file's base URL. Each account also has a small link icon that opens that service's own usage or billing page.
+Accounts are found automatically: PawGauge reads Claude Code's `settings.json` and `settings.*.json` and picks the service from each file's `ANTHROPIC_BASE_URL`. Each account also has a small link icon that opens that service's own usage or billing page.
+
+| Service | Domains recognised (subdomains included) | Not supported yet |
+|---|---|---|
+| z.ai | `z.ai` | `bigmodel.cn` (mainland China) |
+| MiniMax | `minimax.io` | `minimaxi.com`, `minimax.cn` (mainland China) |
+| DeepSeek | `deepseek.com` | |
+
+A key is only sent to the service its file points at. Relays, gateways and other hosts are skipped, even with a service's name in the address, and a mainland China key is not sent to the international servers. The address is checked again each time the key is read, so repointing a file while PawGauge runs does not send the new key to the old service.
 
 ### Claude plan usage
 
@@ -51,7 +59,7 @@ Claude has no key-based quota API, so the Claude row needs one setup step: Claud
 }
 ```
 
-It writes `~/.claude/usage-snapshot.json` (atomically) whenever a session on a Claude plan reports its limits, and prints `5h 38% · week 9%` as the status line. If you already have a status line, copy the `rate_limits` block from the script into yours instead. Until the first reading arrives the row says "No reading yet"; sessions on other backends carry no limits and leave the last reading alone. To hide the Claude row entirely, set `"overrides": { "claude": { "hidden": true } }` in `accounts.json`.
+It writes `~/.claude/usage-snapshot.json` (atomically) whenever a session on a Claude plan reports its limits, and prints `5h 38% · week 9%` as the status line. If you already have a status line, copy the `rate_limits` block from the script into yours instead. Until the first reading arrives the row says "No reading yet"; sessions on other backends carry no limits and leave the last reading alone. The snapshot is always in `~/.claude`, even if `CLAUDE_CONFIG_DIR` moves your settings. The row appears only when PawGauge finds Claude Code's folder or a snapshot. The installer does not include the script: download it from this repository; running it needs [Node.js](https://nodejs.org). To hide the Claude row entirely, set `"overrides": { "claude": { "hidden": true } }` in `accounts.json`.
 
 > **Not affiliated.** PawGauge is an independent project. It is not affiliated with, endorsed by or sponsored by Anthropic, Z.ai, MiniMax or DeepSeek. Their names belong to them and appear only to identify each service; PawGauge shows a letter badge, not their logos.
 >
@@ -86,7 +94,15 @@ On macOS the app is menu-bar only (no Dock icon). Left-click the icon to show or
 
 ## Accounts and settings
 
-Most people need no configuration. To add an account that has no settings file, or to rename or hide one, create `accounts.json` in the app-data folder (`%APPDATA%\PawGauge` on Windows, `~/Library/Application Support/PawGauge` on macOS):
+If your settings are in the files above, you need no configuration. When no z.ai, MiniMax or DeepSeek account is found, the window shows an **account check**: where PawGauge looked, each file it read, and why any were skipped. It shows file names and host names, never keys. Reopen it any time with **Account check…** in the tray menu. **Refresh** reads the files again, so a new account needs no restart.
+
+Things a tray app cannot see on its own:
+
+- **Environment variables set in a terminal or shell profile** (`.zshrc`, `.bashrc`, a PowerShell session). An app opened from the Start menu, Finder or at login does not get them. This also applies to `"env"` below: the variable has to be visible to desktop apps (on Windows, a user environment variable, then restart PawGauge). A settings file is the more reliable choice, especially on macOS.
+- **`CLAUDE_CONFIG_DIR` set only in a shell**, for the same reason. Set it as a user environment variable.
+- **Other tools' config files.** PawGauge reads Claude Code's format only; for other tools use `accounts.json`.
+
+To add an account that has no settings file, or to rename or hide one, create `accounts.json` in the app-data folder (`%APPDATA%\PawGauge` on Windows, `~/Library/Application Support/PawGauge` on macOS):
 
 ```json
 {
@@ -97,6 +113,8 @@ Most people need no configuration. To add an account that has no settings file, 
   ]
 }
 ```
+
+A `"settings"` name is relative to Claude Code's config folder. If that file has an `ANTHROPIC_BASE_URL`, it must be one of the provider's recognised domains; if it has none, the key goes to the provider you named.
 
 Drag the grip at the left of an account to reorder it (or focus it and use the arrow keys); the order is remembered, and the header's sort button returns to automatic urgency order.
 
@@ -109,7 +127,7 @@ Drag the grip at the left of an account to reorder it (or focus it and use the a
 
 ## Add a service
 
-Providers are code, accounts are data. Write `src/main/providers/<name>.js` exporting `fetchUsage(account, key)`, then register it in `src/main/providers/index.js` with a display name, a poll interval, a host pattern and the URL of its usage page.
+Providers are code, accounts are data. Write `src/main/providers/<name>.js` exporting `fetchUsage(account, key)`, then register it in `src/main/providers/index.js` with a display name, a poll interval, the domains whose keys it may receive and the URL of its usage page.
 
 `probe.py` is a read-only helper that calls each provider's quota endpoint once and prints the response *shape* (never a key), for checking what an endpoint returns.
 
@@ -123,6 +141,7 @@ Her sprites are built from the official character master by `tools/make_sprites.
 
 | Version | What's new |
 |---|---|
+| **0.4.41** | Key safety fix, `settings.json` is read too, and a new account check shows why an account is missing |
 | **0.4.40** | Each account is tinted in its service's colour |
 | **0.4.37** | Simpler app and tray icon |
 | **0.4.36** | Fixed: clicking ShadowBlack while she hides could do nothing |

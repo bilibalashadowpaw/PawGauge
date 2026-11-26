@@ -9,7 +9,7 @@ import sys
 import urllib.error
 import urllib.request
 
-CLAUDE_DIR = os.path.join(os.path.expanduser("~"), ".claude")
+CLAUDE_DIR = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
 
 # provider -> list of (url) candidates, tried in order until one returns HTTP 200
 PROVIDERS = {
@@ -24,12 +24,11 @@ PROVIDERS = {
 
 def provider_for(base_url):
     host = re.sub(r"^https?://", "", base_url).split("/")[0]
-    if host.endswith("z.ai"):
-        return "zai"
-    if "minimax" in host:
-        return "minimax"
-    if "deepseek" in host:
-        return "deepseek"
+    host = host.rsplit("@", 1)[-1].split(":")[0].lower()
+    # Whole domains only (the same list as src/main/providers/index.js): a relay's key must never reach the provider.
+    for provider, domain in (("zai", "z.ai"), ("minimax", "minimax.io"), ("deepseek", "deepseek.com")):
+        if host == domain or host.endswith("." + domain):
+            return provider
     return None
 
 
@@ -76,8 +75,9 @@ def fetch(url, key):
 
 def main():
     files = sorted(glob.glob(os.path.join(CLAUDE_DIR, "settings.*.json")))
+    files += glob.glob(os.path.join(CLAUDE_DIR, "settings.json"))
     for f in files:
-        name = os.path.basename(f)[len("settings."):-len(".json")]
+        name = os.path.basename(f)[len("settings."):-len(".json")] or "default"
         try:
             env = json.load(open(f, encoding="utf-8")).get("env", {})
         except Exception as e:
@@ -87,7 +87,7 @@ def main():
         key = env.get("ANTHROPIC_AUTH_TOKEN") or env.get("ANTHROPIC_API_KEY") or ""
         prov = provider_for(base) if base else None
         if not prov or not key:
-            print(f"[{name}] skipped (base={base or '-'}, provider={prov}, has_key={bool(key)})")
+            print(f"[{name}] skipped (provider={prov}, has_key={bool(key)})")
             continue
         print(f"\n=== {name}  provider={prov}  key_len={len(key)} ===")
         for url in PROVIDERS[prov]:

@@ -81,6 +81,8 @@ function errorHint(a) {
     case 'auth': return `Update the key in ${src}.`;
     case 'nokey': return `Add a key in ${src}.`;
     case 'shape': return 'The provider changed its response. PawGauge needs an update.';
+    case 'moved': return `${src} no longer points at this service, so its key was not sent. Press Refresh to check again.`;
+    case 'region': return 'PawGauge cannot read this region yet, so the key was not sent.';
     default: return 'Retrying automatically.';
   }
 }
@@ -262,6 +264,56 @@ const autosortBtn = document.getElementById('autosort');
 autosortBtn.append(icon('sort'));
 autosortBtn.addEventListener('click', () => window.usage.setOrder(null));
 
+/* ---------- account check: what was looked at, and why anything was skipped ---------- */
+const setupEl = document.getElementById('setup');
+const setupSummary = document.getElementById('setup-summary');
+const setupFiles = document.getElementById('setup-files');
+const setupClose = document.getElementById('setup-close');
+let setupKey = null;
+
+const SKIPPED = {
+  'no-base-url': () => 'No API address (ANTHROPIC_BASE_URL) in this file',
+  'bad-url': () => 'The API address is not a valid URL',
+  'unknown-host': (r) => `${r.host} is not a service PawGauge supports`,
+  'unsupported-region': (r) => `${r.providerName} at ${r.host}: this region is not supported yet`,
+  'no-key': (r) => `${r.providerName} address, but no API key`,
+  unreadable: () => 'Not valid JSON, or the file cannot be read',
+  duplicate: (r) => `Same account as ${r.sameAs}`,
+  listed: () => 'Already added in accounts.json',
+  hidden: () => 'Hidden in accounts.json',
+  'unknown-provider': (r) => `The entry "${r.id}" names an unknown provider`,
+  'no-id': () => 'An entry has no id',
+};
+
+function renderSetup() {
+  const report = state.setup;
+  setupEl.hidden = !report;
+  if (!report) {
+    setupKey = null;
+    return;
+  }
+  // Rebuilt only when the findings change, so a poll does not make the screen reader announce them again.
+  const key = JSON.stringify(report);
+  if (key === setupKey) return;
+  setupKey = key;
+  const found = report.files.filter((r) => r.status === 'found').length;
+  const where = report.dirFound ? `Looked in ${report.dir}.` : `No Claude Code folder at ${report.dir}.`;
+  setupSummary.textContent = `${where} ${found ? `Found ${found} ${found === 1 ? 'account' : 'accounts'} with a service PawGauge supports.` : 'No z.ai, MiniMax or DeepSeek account found.'}`;
+  setupFiles.replaceChildren(
+    ...report.files.map((r) => {
+      const ok = r.status === 'found';
+      const text = ok ? `Found: ${r.providerName}` : `Skipped: ${(SKIPPED[r.reason] || (() => r.reason))(r)}`;
+      return h('li', { class: ok ? 'found' : false }, h('span', { class: 'f-name' }, r.file), h('span', { class: 'f-why' }, text));
+    })
+  );
+  setupFiles.hidden = !report.files.length;
+}
+
+setupClose.append(icon('x'));
+setupClose.addEventListener('click', () => window.usage.closeSetup());
+document.getElementById('setup-again').addEventListener('click', () => window.usage.refresh());
+document.getElementById('setup-guide').addEventListener('click', () => window.usage.openSetupGuide());
+
 /* ---------- collapsed pill ---------- */
 const appEl = document.getElementById('app');
 const pill = document.getElementById('pill');
@@ -343,14 +395,16 @@ function render() {
   applyMode();
   renderPill();
   if (dragging) return;
+  renderSetup();
   autosortBtn.hidden = !state.manualOrder;
   mascotBtn.setAttribute('aria-pressed', String(state.mascot !== false));
   const els = state.accounts.map(patchAccount);
   syncChildren(list, els);
   // Just the time: "Updated 05:59 PM" did not fit beside seven buttons and wrapped onto two lines.
   const at = state.updatedAt ? new Date(state.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
-  updatedEl.textContent = at || 'Waiting…';
-  updatedEl.title = at ? `Updated ${at}` : 'Waiting for first reading';
+  const waiting = state.accounts.length > 0; // with no accounts there is nothing to wait for
+  updatedEl.textContent = at || (waiting ? 'Waiting…' : '');
+  updatedEl.title = at ? `Updated ${at}` : waiting ? 'Waiting for first reading' : '';
 
   if (firstRender && state.updatedAt) {
     firstRender = false;

@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('usage', {
   getState: () => ipcRenderer.invoke('get-state'),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
   refresh: () => ipcRenderer.send('refresh'),
+  closeSetup: () => ipcRenderer.send('close-setup'),
+  openSetupGuide: () => ipcRenderer.send('open-setup-guide'),
   quit: () => ipcRenderer.send('quit'),
   hide: () => ipcRenderer.send('hide'),
   setOrder: (ids) => ipcRenderer.send('set-order', ids),

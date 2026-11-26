@@ -22,7 +22,10 @@ process.stdin.on('end', () => {
   const rl = ctx && ctx.rate_limits;
   if (!rl) return; // other backends carry no rate_limits: leave the last snapshot alone
   try {
+    // Always ~/.claude, even when CLAUDE_CONFIG_DIR moves the settings: the app is not started from your shell, so a
+    // fixed place is the one both sides are sure to agree on.
     const out = path.join(os.homedir(), '.claude', 'usage-snapshot.json');
+    fs.mkdirSync(path.dirname(out), { recursive: true });
     const tmp = `${out}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ updatedAt: Date.now(), rate_limits: rl }));
     fs.renameSync(tmp, out); // atomic, so PawGauge never reads half a file

@@ -24,6 +24,19 @@
         <button id="quit" class="icon-btn" type="button" aria-label="Quit PawGauge" title="Quit PawGauge"></button>
       </div>
     </header>
+    <section id="setup" class="setup" aria-labelledby="setup-title" hidden>
+      <div class="setup-head">
+        <h2 id="setup-title">Account check</h2>
+        <button id="setup-close" class="icon-btn" type="button" aria-label="Close the account check" title="Close"></button>
+      </div>
+      <p id="setup-summary" class="setup-summary" role="status"></p>
+      <ul id="setup-files" class="setup-files"></ul>
+      <p class="setup-note">Keys set only in a terminal or shell profile are not visible to PawGauge. You can add accounts by hand in accounts.json.</p>
+      <div class="setup-actions">
+        <button id="setup-again" class="btn" type="button">Check again</button>
+        <button id="setup-guide" class="btn" type="button">Setup guide</button>
+      </div>
+    </section>
     <section id="list" class="list"></section>
   </main>
   <!-- Collapsed form: drag to move, click to expand. -->
