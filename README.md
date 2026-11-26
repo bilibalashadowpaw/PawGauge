@@ -15,6 +15,12 @@ A small tray and menu-bar widget that shows how much of your AI quota is left, w
 
 </div>
 
+## Download
+
+**[Get the latest Windows installer](https://github.com/bilibalashadowpaw/PawGauge/releases/latest)**, free.
+
+It is **not code-signed**, so Windows may warn you. The release page shows how to check your download. There is no macOS download yet; to run it there, see below.
+
 ## Why
 
 AI plans hide their limits behind a settings page: a 5-hour window here, a weekly cap there, a prepaid balance somewhere else. PawGauge puts all of them in one small always-on-top panel, so you notice a limit *before* you hit it, not after.
