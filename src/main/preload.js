@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('usage', {
   removeAccount: (id) => ipcRenderer.send('account-remove', id),
   assignFile: (file) => ipcRenderer.send('account-assign', file),
   pickFile: () => ipcRenderer.send('account-pick'),
+  claudeSetup: () => ipcRenderer.send('claude-setup'),
+  claudeRemove: () => ipcRenderer.send('claude-remove'),
   quit: () => ipcRenderer.send('quit'),
   hide: () => ipcRenderer.send('hide'),
   setOrder: (ids) => ipcRenderer.send('set-order', ids),

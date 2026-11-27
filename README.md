@@ -51,7 +51,11 @@ A key is only sent to the service its file points at. Relays, gateways and other
 
 ### Claude plan usage
 
-Claude has no key-based quota API, so the Claude row needs one setup step: Claude Code's status line must save the `rate_limits` it receives. Point your `~/.claude/settings.json` at the script in this repo:
+Claude has no key-based quota API, so the Claude row needs one setup step: Claude Code's status line must save the `rate_limits` it receives.
+
+**On Windows**, open **Accounts…** from the tray menu and click **Set up…** under Claude usage. A system dialog shows the exact `statusLine` entry before anything is written, with Cancel as the default. Claude Code then runs PawGauge's PowerShell script (no Node.js needed), which is copied to `%APPDATA%\PawGauge`. Only that entry in `settings.json` changes. A status line you already have is never replaced, no backup copy is made (the file can hold keys), and a file that cannot be read as JSON is left alone. **Remove…** takes the entry out again, and so does uninstalling PawGauge. On a managed PC, a Group Policy execution policy overrides the command's `-ExecutionPolicy Bypass` and can stop the script from running. Windows PowerShell takes a moment to start, so the status line updates a little after each reply: about a quarter of a second on the PC it was measured on, and longer on a slower machine or on a first run.
+
+**On macOS, or to set it up by hand**, point your `~/.claude/settings.json` at the Node.js script in this repo:
 
 ```json
 {
@@ -59,7 +63,7 @@ Claude has no key-based quota API, so the Claude row needs one setup step: Claud
 }
 ```
 
-It writes `~/.claude/usage-snapshot.json` (atomically) whenever a session on a Claude plan reports its limits, and prints `5h 38% · week 9%` as the status line. If you already have a status line, copy the `rate_limits` block from the script into yours instead. Until the first reading arrives the row says "No reading yet"; sessions on other backends carry no limits and leave the last reading alone. The snapshot is always in `~/.claude`, even if `CLAUDE_CONFIG_DIR` moves your settings. The row appears only when PawGauge finds Claude Code's folder or a snapshot. The installer does not include the script: download it from this repository; running it needs [Node.js](https://nodejs.org). To hide the Claude row, untick it on the Accounts screen.
+It writes `~/.claude/usage-snapshot.json` (atomically) whenever a session on a Claude plan reports its limits, and prints `5h 38% · week 9%` as the status line. If you already have a status line, copy the `rate_limits` block from the script into yours instead. Until the first reading arrives the row says "No reading yet"; sessions on other backends carry no limits and leave the last reading alone. The snapshot is always in `~/.claude`, even if `CLAUDE_CONFIG_DIR` moves your settings. The row appears only when PawGauge finds Claude Code's folder or a snapshot. The Node.js script is not in the installer: download it from this repository; running it needs [Node.js](https://nodejs.org). To hide the Claude row, untick it on the Accounts screen.
 
 > **Not affiliated.** PawGauge is an independent project. It is not affiliated with, endorsed by or sponsored by Anthropic, Z.ai, MiniMax or DeepSeek. Their names belong to them and appear only to identify each service; PawGauge shows a letter badge, not their logos.
 >
@@ -103,7 +107,7 @@ On that screen you can:
 - **Choose its service…** for a file that has a key but no address. Claude Code uses a key like that with Anthropic, so only do this if you know the key came from the service you pick. A system dialog asks first, and Cancel is the default.
 - **Remove** an account that was added this way or by hand.
 
-The screen saves to PawGauge's own `accounts.json` and never changes Claude Code's files. It does not ask you to type a key. If `accounts.json` cannot be understood, it is left as it is.
+Account choices are saved to PawGauge's own `accounts.json`; the only change the screen can make to a Claude Code file is the Claude usage status line described above. It does not ask you to type a key. If `accounts.json` cannot be understood, it is left as it is.
 
 Things a tray app cannot see on its own:
 
@@ -129,9 +133,9 @@ Drag the grip at the left of an account to reorder it (or focus it and use the a
 
 ## Privacy and security
 
-- Keys are read from disk at poll time, used for a single HTTPS request to the service's own endpoint, and dropped. They are never cached, logged or written.
+- Keys are read from disk at poll time, used for a single HTTPS request to the service's own endpoint, and dropped. They are never cached or logged, and PawGauge keeps no copy of one. The one time key text is written is Claude usage setup or removal: `settings.json` is rewritten with only its `statusLine` entry changed, so any key in it is carried over unchanged, through a temporary file beside it that is renamed over the original.
 - The window is sandboxed, with context isolation and a strict content security policy. It never receives a key.
-- The app stores only your preferences, your account choices (names, hidden accounts, added settings file names) and a short history of balances and timestamps. No telemetry, no auto-update.
+- The app stores only your preferences, your account choices (names, hidden accounts, added settings file names), a copy of its status-line script if you set up Claude usage, and a short history of balances and timestamps. No telemetry, no auto-update.
 - Read [SECURITY.md](SECURITY.md) for details and how to report a problem.
 
 ## Add a service
@@ -150,6 +154,7 @@ Her sprites are built from the official character master by `tools/make_sprites.
 
 | Version | What's new |
 |---|---|
+| **0.4.43** | Set up Claude usage from the Accounts screen on Windows, no Node.js needed. Remove or uninstall takes it out again |
 | **0.4.42** | New Accounts screen to show, hide, rename and add accounts. A settings file switched to another service now updates by itself, with the right badge and link |
 | **0.4.41** | Key safety fix, `settings.json` is read too, and a new account check shows why an account is missing |
 | **0.4.40** | Each account is tinted in its service's colour |

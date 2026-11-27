@@ -4,6 +4,7 @@ const fs = require('fs');
 const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, shell, session, systemPreferences, dialog } = require('electron');
 const { scanAccounts, planAdd } = require('./accounts');
 const userAccounts = require('./user-accounts');
+const statusline = require('./statusline');
 const { Poller } = require('./poller');
 const { providers } = require('./providers');
 const { History } = require('./history');
@@ -21,7 +22,21 @@ const SHOT_LIGHT = argv.includes('--light');
 const LIVE = argv.includes('--live'); // with --shot: use real accounts instead of demo data
 const USE_DEMO = DEMO || (SHOT && !LIVE);
 const IS_MAC = process.platform === 'darwin';
+const IS_WINDOWS = process.platform === 'win32';
 const HIDDEN = argv.includes('--hidden'); // set on the login-item launch: start in the tray without popping the window
+
+// The uninstaller runs `PawGauge.exe --remove-statusline`: take our own status line out of Claude Code's settings, if it
+// is there, and exit without opening anything. Anything else in that file, or a status line of your own, is left alone.
+if (argv.includes('--remove-statusline')) {
+  try {
+    const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(require('os').homedir(), '.claude');
+    statusline.apply(statusline.plan(claudeDir, path.join(app.getPath('appData'), 'PawGauge', statusline.SCRIPT_NAME), 'remove'));
+  } catch {
+    /* nothing of ours to remove, or a file that must not be touched */
+  }
+  app.exit(0);
+  return;
+}
 
 // Start at login is OFF by default (the installer puts a desktop shortcut instead); the tray menu toggles it.
 // Unpackaged (npm start), the login item must run electron.exe with the project path as its first argument.
@@ -445,7 +460,56 @@ function setupState() {
   if (!scan) return null;
   const firstRun = !SHOT && prefs.get('setupSeen', false) !== true;
   const dismissed = !SHOT && prefs.get('setupDismissed', false) === true;
-  return setupAsked || firstRun || (!hasKeyAccount() && !dismissed) ? scan.report : null;
+  return setupAsked || firstRun || (!hasKeyAccount() && !dismissed) ? { ...scan.report, claude: claudeUsage() } : null;
+}
+
+/* ---------- Claude usage: the one change PawGauge can make to a Claude Code file, always asked first ---------- */
+const statusScript = () => path.join(userDir, statusline.SCRIPT_NAME);
+const scriptSource = () =>
+  app.isPackaged ? path.join(process.resourcesPath, 'statusline-snapshot.ps1') : path.join(__dirname, '..', '..', 'tools', 'statusline-snapshot.ps1');
+const SNAPSHOT_RECENT_MS = 7 * 24 * 3600 * 1000;
+
+// What the Accounts screen shows. States and yes/no answers only: nothing read from settings.json reaches the page.
+function claudeUsage() {
+  let hasReading = false;
+  try {
+    hasReading = Date.now() - fs.statSync(path.join(require('os').homedir(), '.claude', 'usage-snapshot.json')).mtimeMs < SNAPSHOT_RECENT_MS;
+  } catch {
+    /* no reading yet */
+  }
+  return { ...statusline.inspect(scan.claudeDir, statusScript()), hasReading, supported: IS_WINDOWS };
+}
+
+// A system dialog shows the exact change, with Cancel as the default.
+async function changeStatusLine(action) {
+  if (!IS_WINDOWS) return;
+  applyAccounts();
+  const change = statusline.plan(scan.claudeDir, statusScript(), action);
+  const setup = action === 'setup';
+  const detail = setup
+    ? [
+        'PawGauge will add this entry to settings.json in Claude Code\'s folder. Nothing else in the file changes.',
+        `"statusLine": ${JSON.stringify(change.entry, null, 2)}`,
+        'Claude Code then runs this small PowerShell script after it replies. It saves your plan usage on this computer and shows it in the status line. You can remove it here at any time, and uninstalling PawGauge removes it too.',
+        ...(statusline.inspect(scan.claudeDir, statusScript()).hooksDisabled
+          ? ['Note: "disableAllHooks" is on in settings.json, so Claude Code will not run it until you turn that off.']
+          : []),
+      ]
+    : ['PawGauge will remove its "statusLine" entry from settings.json in Claude Code\'s folder. Nothing else in the file changes. The Claude row then stops getting new readings.'];
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    title: 'PawGauge',
+    message: setup ? 'Set up Claude usage?' : 'Remove Claude usage setup?',
+    detail: detail.join('\n\n'),
+    buttons: ['Cancel', setup ? 'Add status line' : 'Remove it'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  if (response !== 1) return;
+  if (setup) statusline.installScript(scriptSource(), statusScript()); // the script is in place before anything points at it
+  statusline.apply(change);
+  applyAccounts();
 }
 
 /* ---------- Accounts screen: show, hide, rename, add. Only PawGauge's own accounts.json is ever written ---------- */
@@ -656,6 +720,8 @@ ipcMain.on('account-assign', (e, file) => {
   });
 });
 ipcMain.on('account-pick', (e) => whileChoosing(e, pickSettingsFile));
+ipcMain.on('claude-setup', (e) => whileChoosing(e, () => changeStatusLine('setup')));
+ipcMain.on('claude-remove', (e) => whileChoosing(e, () => changeStatusLine('remove')));
 ipcMain.on('open-setup-guide', () => shell.openExternal(SETUP_GUIDE_URL));
 ipcMain.on('quit', () => {
   app.isQuitting = true;
@@ -751,6 +817,15 @@ app.whenReady().then(() => {
 
   if (!USE_DEMO) {
     scan = scanAccounts(userDir);
+    if (!SHOT) statusline.sweep(scan.claudeDir);
+    // If our status line is set up, keep its script current (an update may have changed it) and put it back if it is gone.
+    if (IS_WINDOWS && !SHOT && statusline.inspect(scan.claudeDir, statusScript()).state === 'ours') {
+      try {
+        statusline.installScript(scriptSource(), statusScript());
+      } catch (e) {
+        console.error('could not update the status line script:', e && e.message);
+      }
+    }
     poller = new Poller(scan.accounts, new History(userDir));
     poller.on('change', pushState);
     poller.on('moved', (account) => setImmediate(() => followMove(account)));

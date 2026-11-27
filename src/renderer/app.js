@@ -136,7 +136,7 @@ function bodyFor(a, n) {
     return [h('div', { class: 'loading', 'aria-busy': 'true' }, skeletonMeter('5h'), skeletonMeter('Week'))];
   }
   if (a.status === 'empty') {
-    return [h('div', { class: 'notice plain' }, h('div', {}, 'No reading yet', h('small', {}, 'Needs the status-line script from the README, then a Claude Code session on your plan.')))];
+    return [h('div', { class: 'notice plain' }, h('div', {}, 'No reading yet', h('small', {}, 'See Claude usage under Accounts… in the tray menu, then use Claude Code on your plan.')))];
   }
   const parts = [];
   if (a.kind === 'balance' && a.balance) {
@@ -335,6 +335,40 @@ function skippedRow(r) {
   return h('li', {}, h('span', { class: 'f-name' }, r.file), why, assign);
 }
 
+// What to say about Claude usage in each state of Claude Code's status line, and which buttons make sense.
+function claudeLine(c) {
+  const arriving = c.hasReading ? 'Usage readings are arriving.' : 'Waiting for a reading from a Claude Code session on your plan.';
+  const off = c.hooksDisabled ? ' "disableAllHooks" is on in settings.json, so Claude Code will not run a status line from it.' : '';
+  if (c.state === 'unreadable') return { text: 'settings.json cannot be read as JSON, so PawGauge leaves it alone.' };
+  if (c.state === 'other') {
+    return {
+      text: c.hasReading
+        ? 'You have your own status line, and usage readings are arriving. PawGauge leaves it alone.'
+        : 'You already have a status line, and PawGauge will not replace it. The README\'s Claude plan usage section shows how to save readings from your own.',
+    };
+  }
+  if (!c.supported) return { text: `Automatic setup is for Windows. The setup guide shows the steps.${c.hasReading ? ` ${arriving}` : ''}` };
+  if (c.state === 'ours') return { text: `Set up by PawGauge. ${arriving}${off}`, remove: true };
+  if (c.state === 'ours-old') return { text: `The status line points at PawGauge's script in an old place.${off}`, set: 'Update…', remove: true };
+  return { text: `${c.hasReading ? 'Not set up by PawGauge, but a reading was saved recently.' : 'Not set up.'}${off}`, set: 'Set up…' };
+}
+
+const setupClaude = document.getElementById('setup-claude');
+const claudeStatus = document.getElementById('claude-status');
+const claudeSet = document.getElementById('claude-set');
+const claudeRemove = document.getElementById('claude-remove');
+claudeSet.addEventListener('click', () => window.usage.claudeSetup());
+claudeRemove.addEventListener('click', () => window.usage.claudeRemove());
+
+function renderClaude(c) {
+  setupClaude.hidden = c.state === 'no-claude';
+  const line = claudeLine(c);
+  claudeStatus.textContent = line.text;
+  claudeSet.textContent = line.set || 'Set up…';
+  claudeSet.hidden = !line.set;
+  claudeRemove.hidden = !line.remove;
+}
+
 function renderSetup() {
   const report = state.setup;
   setupEl.hidden = !report;
@@ -354,11 +388,21 @@ function renderSetup() {
   const skipped = report.files.filter((r) => r.status === 'skipped' && r.reason !== 'hidden' && r.reason !== 'listed');
   setupFiles.replaceChildren(...skipped.map(skippedRow));
   setupFiles.hidden = !skipped.length;
+  renderClaude(report.claude);
+  // With no Claude Code folder there is no file to add, and with no accounts there is nothing to tick.
+  setupAdd.hidden = !report.dirFound;
+  setupNote.textContent = [
+    report.accounts.length ? 'Tick an account to show it, or type a new name. Your choices are saved in PawGauge\'s own accounts.json.' : '',
+    report.dirFound ? 'Claude Code\'s files change only if you set up or remove Claude usage here.' : '',
+    'Keys set only in a terminal or shell profile are not visible to PawGauge.',
+  ].filter(Boolean).join(' ');
 }
 
 setupClose.append(icon('x'));
 setupClose.addEventListener('click', () => window.usage.closeSetup());
-document.getElementById('setup-add').addEventListener('click', () => window.usage.pickFile());
+const setupAdd = document.getElementById('setup-add');
+const setupNote = document.getElementById('setup-note');
+setupAdd.addEventListener('click', () => window.usage.pickFile());
 document.getElementById('setup-again').addEventListener('click', () => window.usage.refresh());
 document.getElementById('setup-guide').addEventListener('click', () => window.usage.openSetupGuide());
 

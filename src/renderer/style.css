@@ -322,6 +322,9 @@ html.collapsed .pill {
 .a-from { grid-column: 2 / 4; margin-top: 2px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
 .f-name { display: block; font: 500 12px var(--font-mono); }
 .f-why { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.setup-claude { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.setup-claude .setup-actions { margin-top: 6px; }
+.setup-claude .setup-actions:not(:has(.btn:not([hidden]))) { display: none; }
 .setup-note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 .setup-actions { display: flex; gap: 8px; margin-top: 10px; }
 .btn { padding: 5px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: 500 12px var(--font-sans); cursor: pointer; }

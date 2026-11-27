@@ -31,8 +31,16 @@
       </div>
       <p id="setup-summary" class="setup-summary" role="status"></p>
       <ul id="setup-accounts" class="setup-accounts" aria-label="Your accounts"></ul>
+      <div id="setup-claude" class="setup-claude" hidden>
+        <span class="f-name">Claude usage</span>
+        <span id="claude-status" class="f-why" role="status"></span>
+        <div class="setup-actions">
+          <button id="claude-set" class="btn" type="button">Set up…</button>
+          <button id="claude-remove" class="btn" type="button">Remove…</button>
+        </div>
+      </div>
       <ul id="setup-files" class="setup-files" aria-label="Files that were skipped"></ul>
-      <p class="setup-note">Tick an account to show it, or type a new name. Your choices are saved in PawGauge's own accounts.json; Claude Code's files are not changed. Keys set only in a terminal or shell profile are not visible to PawGauge.</p>
+      <p id="setup-note" class="setup-note"></p>
       <div class="setup-actions">
         <button id="setup-add" class="btn" type="button">Add a file…</button>
         <button id="setup-again" class="btn" type="button">Check again</button>

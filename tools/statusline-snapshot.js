@@ -26,6 +26,16 @@ process.stdin.on('end', () => {
     // fixed place is the one both sides are sure to agree on.
     const out = path.join(os.homedir(), '.claude', 'usage-snapshot.json');
     fs.mkdirSync(path.dirname(out), { recursive: true });
+    // Claude Code cancels a run that is still going when a new update arrives, which can strand a temporary file.
+    for (const f of fs.readdirSync(path.dirname(out))) {
+      if (!/^usage-snapshot\.json\.\d+\.tmp$/.test(f)) continue;
+      const old = path.join(path.dirname(out), f);
+      try {
+        if (Date.now() - fs.statSync(old).mtimeMs > 60_000) fs.unlinkSync(old);
+      } catch {
+        /* another run got there first */
+      }
+    }
     const tmp = `${out}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ updatedAt: Date.now(), rate_limits: rl }));
     fs.renameSync(tmp, out); // atomic, so PawGauge never reads half a file
