@@ -46,7 +46,7 @@ function inspect(file) {
   const { data, error } = readJson(file);
   if (error) return { reason: 'unreadable' };
   const env = envOf(data);
-  if (!env.ANTHROPIC_BASE_URL) return { reason: 'no-base-url' };
+  if (!env.ANTHROPIC_BASE_URL) return { reason: 'no-base-url', hasKey: !!keyIn(env) };
   const host = hostOf(env.ANTHROPIC_BASE_URL);
   if (!host) return { reason: 'bad-url' };
   const match = classifyHost(host);
@@ -75,16 +75,22 @@ function discover(dir, userAccounts, report) {
     const r = inspect(path.join(dir, f));
     const row = { file: f, status: 'skipped', reason: r.reason, host: r.host, provider: r.provider };
     report.files.push(row);
-    if (!r.account) continue;
+    // A file named by a usable accounts.json entry belongs to that entry: it is not added a second time.
+    const listed = userAccounts.some((a) => a.settings === f && a.id && providers[a.provider]);
+    if (listed) row.reason = 'listed';
+    if (!r.account) {
+      if (!listed && r.hasKey) row.canAssign = true;
+      continue;
+    }
     const { provider } = r.account;
     row.provider = provider;
     const fingerprint = `${provider}\n${r.key}`;
+    if (listed) {
+      seenKeys.set(fingerprint, f);
+      continue;
+    }
     let id = f.replace(/^settings\./, '').replace(/\.json$/, '');
     if (f === 'settings.json') {
-      if (userAccounts.some((a) => a.settings === f)) {
-        row.reason = 'listed';
-        continue;
-      }
       if (seenKeys.has(fingerprint)) {
         row.reason = 'duplicate';
         row.sameAs = seenKeys.get(fingerprint);
@@ -113,7 +119,8 @@ function keyFor(account) {
   if (!key) return null;
   if (!env.ANTHROPIC_BASE_URL) {
     // Written by hand in accounts.json, the user has said whose key this is. Found automatically, the address was the proof.
-    if (account.discovered) throw new ProviderError('moved', 'Settings file changed');
+    // needsAddress: added from the Accounts screen because of its address, so losing the address ends that too.
+    if (account.discovered || account.needsAddress) throw new ProviderError('moved', 'Settings file changed');
     return key;
   }
   const host = hostOf(env.ANTHROPIC_BASE_URL);
@@ -138,8 +145,9 @@ function scanAccounts(userDir, { env = process.env, home = os.homedir() } = {}) 
   const hasClaude = report.dirFound || fs.existsSync(path.join(home, '.claude', 'usage-snapshot.json'));
   const list = [...(hasClaude ? [{ id: 'claude', provider: 'anthropic' }] : []), ...discovered, ...userAccounts];
 
+  const isHidden = (a) => !!(overrides[a.id] && overrides[a.id].hidden);
   const seen = new Set();
-  const accounts = list.filter((a) => {
+  const every = list.filter((a) => {
     const own = userAccounts.includes(a);
     if (!a.id || !providers[a.provider]) {
       if (own) report.files.push({ file: 'accounts.json', status: 'skipped', reason: a.id ? 'unknown-provider' : 'no-id', id: a.id });
@@ -147,32 +155,49 @@ function scanAccounts(userDir, { env = process.env, home = os.homedir() } = {}) 
     }
     if (seen.has(a.id)) return false;
     seen.add(a.id);
-    if (!(overrides[a.id] && overrides[a.id].hidden)) {
+    if (!isHidden(a)) {
       if (own) report.files.push({ file: 'accounts.json', status: 'found', provider: a.provider, id: a.id });
       return true;
     }
     const row = report.files.find((r) => r.status === 'found' && r.id === a.id);
     if (row) Object.assign(row, { status: 'skipped', reason: 'hidden' });
-    return false;
+    return true;
   });
+  const accounts = every.filter((a) => !isHidden(a));
 
   const perProvider = {};
   for (const a of accounts) perProvider[a.provider] = (perProvider[a.provider] || 0) + 1;
+  // The name an account gets when nobody has typed one. A hidden account counts itself in, as it would be if shown.
+  const autoLabel = (a) => {
+    const p = providers[a.provider];
+    const total = (perProvider[a.provider] || 0) + (isHidden(a) ? 1 : 0);
+    return a.label || (total > 1 ? `${p.name} · ${a.id}` : p.name);
+  };
+  const typed = (a) => (overrides[a.id] && overrides[a.id].label) || '';
+
+  // For the Accounts screen: every account, hidden ones too, so each can be shown again or renamed.
+  report.accounts = every.map((a) => ({
+    id: a.id,
+    provider: a.provider,
+    providerName: providers[a.provider].name,
+    label: typed(a),
+    autoLabel: autoLabel(a),
+    source: a.settings ? path.basename(a.settings) : a.env || null,
+    hidden: isHidden(a),
+    removable: userAccounts.includes(a),
+  }));
 
   for (const row of report.files) if (providers[row.provider]) row.providerName = providers[row.provider].name;
 
   return {
     report,
+    claudeDir,
     accounts: accounts.map((a) => {
       const p = providers[a.provider];
-      const label =
-        (overrides[a.id] && overrides[a.id].label) ||
-        a.label ||
-        (perProvider[a.provider] > 1 ? `${p.name} · ${a.id}` : p.name);
       return {
         id: a.id,
         provider: a.provider,
-        label,
+        label: typed(a) || autoLabel(a),
         providerName: p.name,
         monogram: p.monogram,
         settings: a.settings || null,
@@ -180,9 +205,46 @@ function scanAccounts(userDir, { env = process.env, home = os.homedir() } = {}) 
         sourceName: a.settings || a.env || null,
         claudeDir,
         discovered: discovered.includes(a),
+        needsAddress: !!a.needsAddress,
       };
     }),
   };
 }
 
-module.exports = { scanAccounts, keyFor };
+/**
+ * What "add this settings file" would do. name: a file directly inside Claude Code's folder. Returns
+ *   { error }                      it cannot be used, and why
+ *   { account }                    its address says which service it belongs to
+ *   { account, choose: [ids] }     it has a key but no address: only the user can say whose, and must confirm it
+ */
+function planAdd(claudeDir, report, name) {
+  if (typeof name !== 'string' || name !== path.basename(name) || /[\\/]/.test(name) || !/\.json$/i.test(name)) {
+    return { error: 'Choose a .json file that is directly inside Claude Code\'s folder.' };
+  }
+  const inUse = report.accounts.some((a) => a.source === name);
+  if (inUse) return { error: `${name} is already in the list.` };
+  const same = report.files.find((r) => r.file === name && r.reason === 'duplicate');
+  if (same) return { error: `${name} holds the same account as ${same.sameAs}.` };
+
+  const r = inspect(path.join(claudeDir, name));
+  const taken = new Set(report.accounts.map((a) => a.id));
+  const stem = name.replace(/\.json$/i, '').replace(/^settings\./, '').replace(/[^\w.-]+/g, '-') || 'account';
+  let id = stem;
+  for (let n = 2; taken.has(id); n++) id = `${stem}-${n}`;
+
+  if (r.account) return { account: { id, provider: r.account.provider, settings: name, needsAddress: true } };
+  if (r.reason === 'no-base-url' && r.hasKey) {
+    return { account: { id, settings: name }, choose: Object.keys(providers).filter((p) => providers[p].needsKey) };
+  }
+  const why = {
+    unreadable: 'is not valid JSON, or cannot be read.',
+    'no-base-url': 'has no API key in it.',
+    'bad-url': 'has an API address that is not a valid URL.',
+    'unknown-host': `points at ${r.host}, which is not a service PawGauge supports.`,
+    'unsupported-region': `points at ${r.host}. That region is not supported yet.`,
+    'no-key': 'has no API key in it.',
+  };
+  return { error: `${name} ${why[r.reason] || 'cannot be used.'}` };
+}
+
+module.exports = { scanAccounts, keyFor, planAdd };

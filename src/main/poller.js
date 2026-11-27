@@ -118,6 +118,19 @@ class Poller extends EventEmitter {
     return added;
   }
 
+  /**
+   * A 'moved' account's file may now belong to another service. next: the accounts from a fresh scan. Only that one row is
+   * swapped, and only for another service's account: a dropped row would not come back when the file is switched back,
+   * while the error row recovers on its next poll. Only the new account is polled, so this cannot set itself off again.
+   */
+  followMove(moved, next) {
+    if (!this.accounts.includes(moved)) return false;
+    const now = next.find((a) => a.id === moved.id);
+    if (!now || now.provider === moved.provider) return false;
+    this.setAccounts(this.accounts.map((a) => (a === moved ? now : a)));
+    return true;
+  }
+
   /** skip: accounts that setAccounts has just started, which are polling already. */
   async refreshAll(skip = []) {
     await Promise.all(this.accounts.filter((a) => !skip.includes(a)).map((a) => this._poll(a)));
@@ -159,6 +172,7 @@ class Poller extends EventEmitter {
       const message = e instanceof ProviderError ? e.message : 'Unexpected error';
       // Keep the last good reading visible (dimmed by the UI) next to the error.
       this.views.set(a.id, { ...prev, status: 'error', error: { kind, message } });
+      if (kind === 'moved') this.emit('moved', a);
     }
     this.updatedAt = Date.now();
     this.emit('change');

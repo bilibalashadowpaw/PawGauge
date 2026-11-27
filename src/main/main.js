@@ -1,8 +1,9 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, shell, session, systemPreferences } = require('electron');
-const { scanAccounts } = require('./accounts');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, shell, session, systemPreferences, dialog } = require('electron');
+const { scanAccounts, planAdd } = require('./accounts');
+const userAccounts = require('./user-accounts');
 const { Poller } = require('./poller');
 const { providers } = require('./providers');
 const { History } = require('./history');
@@ -55,7 +56,8 @@ let autoCollapse = false;
 let pendingExpand = false; // "Show" arrived while a collapse was still animating
 let userDir = null;
 let scan = null; // the latest account scan: { accounts, report }; null with demo data
-let setupAsked = false; // "Account check" was chosen from the tray menu
+let setupAsked = false; // "Accounts" was chosen from the tray menu
+let choosing = false; // a file picker or question is open
 
 // The pages only ever load our own bundled files and never navigate. Refuse anything else a page might try: new windows,
 // any navigation or redirect, and permission prompts (camera, notifications, ...).
@@ -419,7 +421,7 @@ function toggleWindow() {
   else showWindow();
 }
 
-/* ---------- accounts: scanned at startup, on Refresh and from the account check ---------- */
+/* ---------- accounts: scanned at startup, on Refresh and from the Accounts screen ---------- */
 const hasKeyAccount = () => scan.accounts.some((a) => a.provider !== 'anthropic');
 
 function refresh() {
@@ -429,11 +431,102 @@ function refresh() {
   pushState();
 }
 
-// The account check opens by itself while no account with a key is found, until it is closed; the tray menu reopens it.
+// A settings file now points elsewhere: if that is another supported service, its row takes over without a Refresh.
+function followMove(account) {
+  const next = scanAccounts(userDir);
+  if (!poller.followMove(account, next.accounts)) return;
+  scan = { ...next, accounts: poller.accounts };
+  pushState();
+}
+
+// The Accounts screen opens by itself on the first run, and while no account with a key is found, until it is closed;
+// the tray menu reopens it.
 function setupState() {
   if (!scan) return null;
+  const firstRun = !SHOT && prefs.get('setupSeen', false) !== true;
   const dismissed = !SHOT && prefs.get('setupDismissed', false) === true;
-  return setupAsked || (!hasKeyAccount() && !dismissed) ? scan.report : null;
+  return setupAsked || firstRun || (!hasKeyAccount() && !dismissed) ? scan.report : null;
+}
+
+/* ---------- Accounts screen: show, hide, rename, add. Only PawGauge's own accounts.json is ever written ---------- */
+const say = (message, detail) => dialog.showMessageBox(win, { type: 'info', title: 'PawGauge', message, detail, buttons: ['OK'], noLink: true });
+
+// Rescan without polling every account again: only new or newly shown ones start.
+function applyAccounts() {
+  scan = scanAccounts(userDir);
+  poller.setAccounts(scan.accounts);
+  scan.accounts = poller.accounts;
+  pushState();
+}
+
+function saveAccounts(change) {
+  try {
+    change();
+  } catch (e) {
+    say('Your change was not saved', e && e.message);
+  }
+  applyAccounts();
+}
+
+const listedAccount = (id) => scan && scan.report.accounts.find((a) => a.id === id);
+
+// A settings file with a key but no address is normally a Claude (Anthropic) key, so the page cannot assign it: the
+// choice is made in a system dialog that names the file and where its key will be sent, and Cancel is the default.
+async function addSettingsFile(name) {
+  applyAccounts(); // decide from the files as they are now
+  const plan = planAdd(scan.claudeDir, scan.report, name);
+  if (plan.error) {
+    await say('That file was not added', plan.error);
+    return;
+  }
+  let { account } = plan;
+  if (plan.choose) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning',
+      title: 'PawGauge',
+      message: `Whose key is in ${name}?`,
+      detail: [
+        'This file has no API address. Claude Code uses a key like that with Anthropic, so it may be your Anthropic key.',
+        'Choose a service only if you know the key came from it. PawGauge will send the key to that service:',
+        plan.choose.map((p) => `${providers[p].name} receives it at ${providers[p].domains.join(', ')}`).join('\n'),
+      ].join('\n\n'),
+      buttons: ['Cancel', ...plan.choose.map((p) => `Send to ${providers[p].name}`)],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (!(response > 0 && response <= plan.choose.length)) return;
+    account = { id: account.id, provider: plan.choose[response - 1], settings: name };
+  }
+  saveAccounts(() => userAccounts.addAccount(userDir, account));
+}
+
+async function pickSettingsFile() {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: "Choose a settings file in Claude Code's folder",
+    defaultPath: scan.claudeDir,
+    properties: ['openFile', 'showHiddenFiles'],
+    filters: [{ name: 'Settings files', extensions: ['json'] }],
+  });
+  if (canceled || !filePaths[0]) return;
+  if (path.relative(scan.claudeDir, path.dirname(filePaths[0])) !== '') {
+    await say('That file was not added', "Choose a file that is directly inside Claude Code's folder.");
+    return;
+  }
+  await addSettingsFile(path.basename(filePaths[0]));
+}
+
+// One dialog at a time, and only for the panel's own page.
+async function whileChoosing(e, task) {
+  if (!scan || choosing || !win || e.sender !== win.webContents) return;
+  choosing = true;
+  try {
+    await task();
+  } catch (err) {
+    await say('That did not work', err && err.message);
+  } finally {
+    choosing = false;
+  }
 }
 
 function openSetup() {
@@ -498,7 +591,7 @@ function createTray() {
       click: (item) => prefs.set('hideMode', item.checked ? 'edge' : 'tray'),
     },
     { label: 'Refresh now', click: refresh },
-    { label: 'Account check…', enabled: !USE_DEMO, click: openSetup },
+    { label: 'Accounts…', enabled: !USE_DEMO, click: openSetup },
     { type: 'separator' },
     { id: 'mascot', label: 'ShadowBlack', type: 'checkbox', checked: mascot ? mascot.isEnabled() : true, click: (item) => setMascot(item.checked) },
     {
@@ -540,9 +633,29 @@ ipcMain.on('refresh', refresh);
 ipcMain.on('close-setup', () => {
   if (!scan) return;
   setupAsked = false;
+  prefs.set('setupSeen', true);
   if (!hasKeyAccount()) prefs.set('setupDismissed', true); // someone with only a Claude plan is not asked again
   pushState();
 });
+// The page names an account or a listed file; both are checked against the latest scan before anything is written.
+ipcMain.on('account-change', (e, id, change) => {
+  if (!win || e.sender !== win.webContents || !listedAccount(id) || !change) return;
+  const next = {};
+  if (typeof change.hidden === 'boolean') next.hidden = change.hidden;
+  if (typeof change.label === 'string') next.label = userAccounts.cleanLabel(change.label);
+  if (Object.keys(next).length) saveAccounts(() => userAccounts.setOverride(userDir, id, next));
+});
+ipcMain.on('account-remove', (e, id) => {
+  const a = listedAccount(id);
+  if (!win || e.sender !== win.webContents || !a || !a.removable) return;
+  saveAccounts(() => userAccounts.removeAccount(userDir, id));
+});
+ipcMain.on('account-assign', (e, file) => {
+  whileChoosing(e, async () => {
+    if (scan.report.files.some((r) => r.canAssign && r.file === file)) await addSettingsFile(file);
+  });
+});
+ipcMain.on('account-pick', (e) => whileChoosing(e, pickSettingsFile));
 ipcMain.on('open-setup-guide', () => shell.openExternal(SETUP_GUIDE_URL));
 ipcMain.on('quit', () => {
   app.isQuitting = true;
@@ -640,6 +753,7 @@ app.whenReady().then(() => {
     scan = scanAccounts(userDir);
     poller = new Poller(scan.accounts, new History(userDir));
     poller.on('change', pushState);
+    poller.on('moved', (account) => setImmediate(() => followMove(account)));
     poller.start();
   }
 

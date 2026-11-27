@@ -59,7 +59,7 @@ Claude has no key-based quota API, so the Claude row needs one setup step: Claud
 }
 ```
 
-It writes `~/.claude/usage-snapshot.json` (atomically) whenever a session on a Claude plan reports its limits, and prints `5h 38% · week 9%` as the status line. If you already have a status line, copy the `rate_limits` block from the script into yours instead. Until the first reading arrives the row says "No reading yet"; sessions on other backends carry no limits and leave the last reading alone. The snapshot is always in `~/.claude`, even if `CLAUDE_CONFIG_DIR` moves your settings. The row appears only when PawGauge finds Claude Code's folder or a snapshot. The installer does not include the script: download it from this repository; running it needs [Node.js](https://nodejs.org). To hide the Claude row entirely, set `"overrides": { "claude": { "hidden": true } }` in `accounts.json`.
+It writes `~/.claude/usage-snapshot.json` (atomically) whenever a session on a Claude plan reports its limits, and prints `5h 38% · week 9%` as the status line. If you already have a status line, copy the `rate_limits` block from the script into yours instead. Until the first reading arrives the row says "No reading yet"; sessions on other backends carry no limits and leave the last reading alone. The snapshot is always in `~/.claude`, even if `CLAUDE_CONFIG_DIR` moves your settings. The row appears only when PawGauge finds Claude Code's folder or a snapshot. The installer does not include the script: download it from this repository; running it needs [Node.js](https://nodejs.org). To hide the Claude row, untick it on the Accounts screen.
 
 > **Not affiliated.** PawGauge is an independent project. It is not affiliated with, endorsed by or sponsored by Anthropic, Z.ai, MiniMax or DeepSeek. Their names belong to them and appear only to identify each service; PawGauge shows a letter badge, not their logos.
 >
@@ -94,7 +94,16 @@ On macOS the app is menu-bar only (no Dock icon). Left-click the icon to show or
 
 ## Accounts and settings
 
-If your settings are in the files above, you need no configuration. When no z.ai, MiniMax or DeepSeek account is found, the window shows an **account check**: where PawGauge looked, each file it read, and why any were skipped. It shows file names and host names, never keys. Reopen it any time with **Account check…** in the tray menu. **Refresh** reads the files again, so a new account needs no restart.
+If your settings are in the files above, you need no configuration. The **Accounts** screen opens the first time PawGauge runs, and again when no z.ai, MiniMax or DeepSeek account is found. Reopen it any time with **Accounts…** in the tray menu. It shows where PawGauge looked, the accounts it has, and why any file was skipped (file names and host names, never keys). **Refresh** reads the files again, so a new account needs no restart.
+
+On that screen you can:
+
+- **Show, hide or rename** an account. An empty name goes back to the automatic one.
+- **Add a file…** from Claude Code's folder under any `.json` name. Its address must be on a supported service's domain, and the account stops if that address is later removed.
+- **Choose its service…** for a file that has a key but no address. Claude Code uses a key like that with Anthropic, so only do this if you know the key came from the service you pick. A system dialog asks first, and Cancel is the default.
+- **Remove** an account that was added this way or by hand.
+
+The screen saves to PawGauge's own `accounts.json` and never changes Claude Code's files. It does not ask you to type a key. If `accounts.json` cannot be understood, it is left as it is.
 
 Things a tray app cannot see on its own:
 
@@ -102,7 +111,7 @@ Things a tray app cannot see on its own:
 - **`CLAUDE_CONFIG_DIR` set only in a shell**, for the same reason. Set it as a user environment variable.
 - **Other tools' config files.** PawGauge reads Claude Code's format only; for other tools use `accounts.json`.
 
-To add an account that has no settings file, or to rename or hide one, create `accounts.json` in the app-data folder (`%APPDATA%\PawGauge` on Windows, `~/Library/Application Support/PawGauge` on macOS):
+To add an account that has no settings file, edit `accounts.json` in the app-data folder (`%APPDATA%\PawGauge` on Windows, `~/Library/Application Support/PawGauge` on macOS):
 
 ```json
 {
@@ -122,7 +131,7 @@ Drag the grip at the left of an account to reorder it (or focus it and use the a
 
 - Keys are read from disk at poll time, used for a single HTTPS request to the service's own endpoint, and dropped. They are never cached, logged or written.
 - The window is sandboxed, with context isolation and a strict content security policy. It never receives a key.
-- The app stores only your preferences and a short history of balances and timestamps. No telemetry, no auto-update.
+- The app stores only your preferences, your account choices (names, hidden accounts, added settings file names) and a short history of balances and timestamps. No telemetry, no auto-update.
 - Read [SECURITY.md](SECURITY.md) for details and how to report a problem.
 
 ## Add a service
@@ -141,6 +150,7 @@ Her sprites are built from the official character master by `tools/make_sprites.
 
 | Version | What's new |
 |---|---|
+| **0.4.42** | New Accounts screen to show, hide, rename and add accounts. A settings file switched to another service now updates by itself, with the right badge and link |
 | **0.4.41** | Key safety fix, `settings.json` is read too, and a new account check shows why an account is missing |
 | **0.4.40** | Each account is tinted in its service's colour |
 | **0.4.37** | Simpler app and tray icon |

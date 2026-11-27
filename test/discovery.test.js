@@ -206,3 +206,63 @@ test('a rescan adds new accounts, keeps readings, and drops a gone one even with
   assert.deepEqual(poller.snapshot().accounts.map((a) => a.id).sort(), ['a', 'c']);
   assert.deepEqual([...poller.timers.keys()].sort(), ['a', 'c']);
 });
+
+test('a file switched to another service hands its row over; a relay keeps the error row until the file comes back', async (t) => {
+  const realFetch = global.fetch;
+  t.after(() => { global.fetch = realFetch; });
+  const body = { is_available: true, balance_infos: [{ currency: 'USD', total_balance: '5' }] };
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(new URL(url).hostname);
+    return { status: 200, ok: true, text: async () => JSON.stringify(body) };
+  };
+  const tick = () => new Promise((r) => setImmediate(r));
+
+  const m = machine({ '.claude/settings.json': cfg(ZAI) });
+  const poller = new Poller(m.scan().accounts.filter((a) => a.provider !== 'anthropic'), { record() {}, daysLeft: () => null });
+  t.after(() => poller.stop());
+  let announced = 0;
+  const swaps = [];
+  poller.on('moved', (a) => {
+    announced++;
+    setImmediate(() => swaps.push(poller.followMove(a, m.scan().accounts))); // as main.js does
+  });
+  const row = () => poller.snapshot().accounts.map((a) => [a.id, a.provider, a.status]);
+
+  m.write('.claude/settings.json', cfg('https://relay.example/v1', 'relay-key'));
+  await poller.refreshAll();
+  await tick();
+  assert.deepEqual(row(), [['default', 'zai', 'error']]);
+  assert.deepEqual([announced, swaps, calls], [1, [false], []]);
+
+  m.write('.claude/settings.json', cfg(DEEPSEEK, 'ds-key')); // later, a supported service
+  await poller.refreshAll();
+  for (let i = 0; i < 5; i++) await tick();
+  assert.deepEqual(row(), [['default', 'deepseek', 'ok']]);
+  assert.deepEqual([announced, swaps], [2, [false, true]]);
+  assert.deepEqual(calls, ['api.deepseek.com']); // polled once, and the new key went nowhere else
+});
+
+test('a hand-written entry pointing at a relay announces once per poll and never swaps or loops', async (t) => {
+  const m = machine({
+    '.claude/settings.relay.json': cfg('https://relay.example/v1'),
+    'appdata/accounts.json': { accounts: [{ id: 'r', provider: 'deepseek', settings: 'settings.relay.json' }] },
+  });
+  const poller = new Poller(m.scan().accounts.filter((a) => a.id === 'r'), { record() {}, daysLeft: () => null });
+  t.after(() => poller.stop());
+  let announced = 0;
+  poller.on('moved', (a) => {
+    announced++;
+    assert.ok(announced < 20, 'rescan loop');
+    setImmediate(() => poller.followMove(a, m.scan().accounts));
+  });
+  await poller.refreshAll();
+  for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+  assert.equal(announced, 1);
+  assert.equal(poller.snapshot().accounts[0].error.kind, 'moved');
+
+  // The entry edited to name another relay file: still the same service, so it waits for Refresh like any other edit.
+  m.write('.claude/settings.other.json', cfg('https://other.example/v1'));
+  m.write('appdata/accounts.json', { accounts: [{ id: 'r', provider: 'deepseek', settings: 'settings.other.json' }] });
+  assert.equal(poller.followMove(poller.accounts[0], m.scan().accounts), false);
+});

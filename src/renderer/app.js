@@ -198,7 +198,8 @@ function makeAccount(a) {
 
 function patchAccount(a) {
   let n = nodes.get(a.id);
-  if (!n) {
+  // Badge, colour and website button are set when the row is built, so a row handed to another service is built again.
+  if (!n || n.el.dataset.provider !== a.provider) {
     n = makeAccount(a);
     nodes.set(a.id, n);
   }
@@ -264,11 +265,13 @@ const autosortBtn = document.getElementById('autosort');
 autosortBtn.append(icon('sort'));
 autosortBtn.addEventListener('click', () => window.usage.setOrder(null));
 
-/* ---------- account check: what was looked at, and why anything was skipped ---------- */
+/* ---------- Accounts screen: every account (show, hide, rename), then each skipped file and why ---------- */
 const setupEl = document.getElementById('setup');
 const setupSummary = document.getElementById('setup-summary');
+const setupAccounts = document.getElementById('setup-accounts');
 const setupFiles = document.getElementById('setup-files');
 const setupClose = document.getElementById('setup-close');
+const setupRows = new Map(); // account id -> row nodes, kept so that a rescan never wipes a name being typed
 let setupKey = null;
 
 const SKIPPED = {
@@ -279,11 +282,58 @@ const SKIPPED = {
   'no-key': (r) => `${r.providerName} address, but no API key`,
   unreadable: () => 'Not valid JSON, or the file cannot be read',
   duplicate: (r) => `Same account as ${r.sameAs}`,
-  listed: () => 'Already added in accounts.json',
-  hidden: () => 'Hidden in accounts.json',
   'unknown-provider': (r) => `The entry "${r.id}" names an unknown provider`,
   'no-id': () => 'An entry has no id',
 };
+
+function makeSetupRow(id) {
+  const n = { id, saved: '' };
+  n.show = h('input', { type: 'checkbox' });
+  n.name = h('input', { class: 'a-name', type: 'text', maxlength: '40', spellcheck: 'false' });
+  n.from = h('span', { class: 'a-from' });
+  n.remove = h('button', { class: 'btn', type: 'button', title: 'Take this added account off the list' }, 'Remove');
+  n.el = h('li', {}, n.show, n.name, n.remove, n.from);
+  n.show.addEventListener('change', () => window.usage.changeAccount(id, { hidden: !n.show.checked }));
+  n.name.addEventListener('change', () => {
+    if (n.name.value.trim() !== n.saved) window.usage.changeAccount(id, { label: n.name.value });
+  });
+  n.name.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    e.stopPropagation(); // Esc here cancels the edit; it must not also hide the window
+    if (e.key === 'Escape') n.name.value = n.saved;
+    n.name.blur();
+  });
+  n.remove.addEventListener('click', () => window.usage.removeAccount(id));
+  return n;
+}
+
+function setupRow(a) {
+  let n = setupRows.get(a.id);
+  if (!n) {
+    n = makeSetupRow(a.id);
+    setupRows.set(a.id, n);
+  }
+  n.saved = a.label;
+  if (document.activeElement !== n.name) n.name.value = a.label;
+  n.name.placeholder = a.autoLabel;
+  n.name.setAttribute('aria-label', `Name for ${a.autoLabel}`);
+  n.show.checked = !a.hidden;
+  n.show.setAttribute('aria-label', `Show ${a.label || a.autoLabel}`);
+  n.from.textContent = a.provider === 'anthropic' ? 'Claude plan usage' : [a.providerName, a.source].filter(Boolean).join(' · ');
+  n.remove.hidden = !a.removable;
+  n.el.className = a.hidden ? 'off' : '';
+  return n.el;
+}
+
+function skippedRow(r) {
+  const why = h('span', { class: 'f-why' }, `Skipped: ${(SKIPPED[r.reason] || (() => r.reason))(r)}`);
+  let assign = null;
+  if (r.canAssign) {
+    assign = h('button', { class: 'btn', type: 'button' }, 'Choose its service…');
+    assign.addEventListener('click', () => window.usage.assignFile(r.file));
+  }
+  return h('li', {}, h('span', { class: 'f-name' }, r.file), why, assign);
+}
 
 function renderSetup() {
   const report = state.setup;
@@ -296,21 +346,19 @@ function renderSetup() {
   const key = JSON.stringify(report);
   if (key === setupKey) return;
   setupKey = key;
-  const found = report.files.filter((r) => r.status === 'found').length;
+  const found = report.accounts.filter((a) => a.provider !== 'anthropic').length;
   const where = report.dirFound ? `Looked in ${report.dir}.` : `No Claude Code folder at ${report.dir}.`;
   setupSummary.textContent = `${where} ${found ? `Found ${found} ${found === 1 ? 'account' : 'accounts'} with a service PawGauge supports.` : 'No z.ai, MiniMax or DeepSeek account found.'}`;
-  setupFiles.replaceChildren(
-    ...report.files.map((r) => {
-      const ok = r.status === 'found';
-      const text = ok ? `Found: ${r.providerName}` : `Skipped: ${(SKIPPED[r.reason] || (() => r.reason))(r)}`;
-      return h('li', { class: ok ? 'found' : false }, h('span', { class: 'f-name' }, r.file), h('span', { class: 'f-why' }, text));
-    })
-  );
-  setupFiles.hidden = !report.files.length;
+  syncChildren(setupAccounts, report.accounts.map(setupRow));
+  setupAccounts.hidden = !report.accounts.length;
+  const skipped = report.files.filter((r) => r.status === 'skipped' && r.reason !== 'hidden' && r.reason !== 'listed');
+  setupFiles.replaceChildren(...skipped.map(skippedRow));
+  setupFiles.hidden = !skipped.length;
 }
 
 setupClose.append(icon('x'));
 setupClose.addEventListener('click', () => window.usage.closeSetup());
+document.getElementById('setup-add').addEventListener('click', () => window.usage.pickFile());
 document.getElementById('setup-again').addEventListener('click', () => window.usage.refresh());
 document.getElementById('setup-guide').addEventListener('click', () => window.usage.openSetupGuide());
 
